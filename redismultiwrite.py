@@ -110,7 +110,7 @@ class RedisMultiWrite(object):
         # Executor that pipelines commands.
         pipe = conn.pipeline()
         for op, args in commands:
-            getattr(conn, op)(*args)
+            getattr(pipe, op)(*args)
         return pipe.execute()
 
     def _run_all(self, executor, data):

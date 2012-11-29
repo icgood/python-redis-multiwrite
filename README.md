@@ -2,11 +2,15 @@
 Installation
 ============
 
-To run the tests:
+To setup the tests:
 
     virtualenv .venv
     . .venv/bin/activate
-    pip install nose redis eventlet
+    pip install nose coverage nosexcover redis eventlet
+
+Then you can repeatedly run:
+
+    nosetests --where=tests --with-xcoverage --cover-erase --cover-package=redisxdc
 
 To install the package `redisxdc` onto your system:
 

@@ -10,9 +10,9 @@ To setup the tests:
 
 Then you can repeatedly run:
 
-    nosetests --where=tests --with-xcoverage --cover-erase --cover-package=redisxdc
+    nosetests --where=tests --with-xcoverage --cover-erase --cover-package=redismultiwrite
 
-To install the package `redisxdc` onto your system:
+To install the package `redismultiwrite` onto your system:
 
     sudo python setup.py install
 
@@ -26,17 +26,17 @@ subsequent functions.
 
 Then create a list of `redis.StrictRedis` objects for each remote datacenter
 redis instance. Cross-datacenter commands will also propogate to these
-connections before return. Create the `redis.RedisXdc` object using these two
-pieces of information:
+connections before return. Create the `redismultiwrite.RedisMultiWrite` object
+using these two pieces of information:
 
     local = redis.StrictRedis(host='localhost')
-    xdc = [redis.StrictRedis(host='redis.example.com')]
-    conn = redisxdc.RedisXdc(local, xdc)
+    remote = [redis.StrictRedis(host='redis.example.com')]
+    conn = redismultiwrite.RedisMultiWrite(local, remote)
 
-The new `RedisXdc` object will functionally mimic a `StrictRedis` object,
+The new `RedisMultiWrite` object will functionally mimic a `StrictRedis` object,
 routing all standard calls to the local `StrictRedis` object.
 
-The `RedisXdc` object will also have 4 extra methods: `set_everywhere`,
+The `RedisMultiWrite` object will also have 4 extra methods: `set_everywhere`,
 `delete_everywhere`, `expire_everywhere`, and `setex_everywhere`. These methods
 correspond to the original, with the added benefit of simultaneously being
 performed against all the remote redis connections.

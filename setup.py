@@ -16,13 +16,13 @@
 
 from setuptools import setup
 
-setup(name='redis-xdc',
+setup(name='redis-multiwrite',
       version='0.0.0',
-      description='Cross-datacenter functions for redis.',
+      description='Simultaneous redis write operations against many servers.',
       author='Ian Good',
       author_email='ian.good@rackspace.com',
-      url='https://github.com/icgood/python-redis-xdc',
-      py_modules=['redisxdc'],
+      url='https://github.com/icgood/python-redis-multiwrite',
+      py_modules=['redismultiwrite'],
       license='Apache License (2.0)',
       install_requires=[
           'setuptools',

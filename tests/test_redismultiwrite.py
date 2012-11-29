@@ -1,6 +1,6 @@
 
 import redis
-import redisxdc
+import redismultiwrite as redismw
 import unittest
 import eventlet.debug
 
@@ -47,87 +47,87 @@ class StrictRedisMock(object):
         self.callstack.append('expire')
         return key == 'good'
 
-class RedisXdcTest(unittest.TestCase):
+class RedisMultiWriteTest(unittest.TestCase):
     def setUp(self):
         self.local = StrictRedisMock('local')
-        self.xdc = [StrictRedisMock('xdc1'), StrictRedisMock('xdc2'),
-                    StrictRedisMock('xdc3', True)]
-        self.redisxdc = redisxdc.RedisXdc(self.local, self.xdc)
+        self.remote = [StrictRedisMock('remote1'), StrictRedisMock('remote2'),
+                       StrictRedisMock('remote3', True)]
+        self.redismw = redismw.RedisMultiWrite(self.local, self.remote)
 
     def test_other_methods(self):
-        ret = self.redisxdc.get('good')
+        ret = self.redismw.get('good')
         self.assertEquals('value', ret)
         self.assertEquals(['get'], self.local.callstack)
-        self.assertEquals([], self.xdc[0].callstack)
-        self.assertEquals([], self.xdc[1].callstack)
+        self.assertEquals([], self.remote[0].callstack)
+        self.assertEquals([], self.remote[1].callstack)
 
     def test_missing_method(self):
         with self.assertRaises(AttributeError):
-            self.redisxdc.test('stuff')
+            self.redismw.test('stuff')
         self.assertEquals([], self.local.callstack)
-        self.assertEquals([], self.xdc[0].callstack)
-        self.assertEquals([], self.xdc[1].callstack)
+        self.assertEquals([], self.remote[0].callstack)
+        self.assertEquals([], self.remote[1].callstack)
 
     def test_local_only(self):
         local = StrictRedisMock('local')
-        localonly = redisxdc.RedisXdc(local)
+        localonly = redismw.RedisMultiWrite(local)
         ret = localonly.delete_everywhere('good')
         self.assertTrue(ret)
         self.assertEquals(['delete'], local.callstack)
 
     def test_broken_local(self):
-        broken = redisxdc.RedisXdc(StrictRedisMock('broken', True),
-                                   [StrictRedisMock('xdc1')])
-        with self.assertRaises(redisxdc.TooManyRetries) as cm:
+        broken = redismw.RedisMultiWrite(StrictRedisMock('broken', True),
+                                         [StrictRedisMock('remote1')])
+        with self.assertRaises(redismw.TooManyRetries) as cm:
             broken.delete_everywhere('good')
         self.assertEquals('broken', cm.exception.host)
         with self.assertRaises(redis.RedisError):
             broken.expire_everywhere('good', 10)
 
     def test_broken_local_only(self):
-        broken = redisxdc.RedisXdc(StrictRedisMock('broken', True))
-        with self.assertRaises(redisxdc.TooManyRetries) as cm:
+        broken = redismw.RedisMultiWrite(StrictRedisMock('broken', True))
+        with self.assertRaises(redismw.TooManyRetries) as cm:
             broken.delete_everywhere('good')
         self.assertEquals('broken', cm.exception.host)
 
     def test_delete_everywhere(self):
-        ret = self.redisxdc.delete_everywhere('good')
+        ret = self.redismw.delete_everywhere('good')
         self.assertTrue(ret)
         self.assertEquals(['delete'], self.local.callstack)
-        self.assertEquals(['delete'], self.xdc[0].callstack)
-        self.assertEquals(['delete'], self.xdc[1].callstack)
-        self.assertEquals([], self.xdc[2].callstack)
+        self.assertEquals(['delete'], self.remote[0].callstack)
+        self.assertEquals(['delete'], self.remote[1].callstack)
+        self.assertEquals([], self.remote[2].callstack)
 
     def test_delete_everywhere_missing_key(self):
-        ret = self.redisxdc.delete_everywhere('bad')
+        ret = self.redismw.delete_everywhere('bad')
         self.assertFalse(ret)
 
     def test_set_everywhere(self):
-        ret = self.redisxdc.set_everywhere('good', 'value')
+        ret = self.redismw.set_everywhere('good', 'value')
         self.assertTrue(ret)
         self.assertEquals(['set'], self.local.callstack)
-        self.assertEquals(['set'], self.xdc[0].callstack)
-        self.assertEquals(['set'], self.xdc[1].callstack)
-        self.assertEquals([], self.xdc[2].callstack)
+        self.assertEquals(['set'], self.remote[0].callstack)
+        self.assertEquals(['set'], self.remote[1].callstack)
+        self.assertEquals([], self.remote[2].callstack)
 
     def test_setex_everywhere(self):
-        ret = self.redisxdc.setex_everywhere('good', 10, 'value')
+        ret = self.redismw.setex_everywhere('good', 10, 'value')
         self.assertTrue(ret)
         self.assertEquals(['setex'], self.local.callstack)
-        self.assertEquals(['setex'], self.xdc[0].callstack)
-        self.assertEquals(['setex'], self.xdc[1].callstack)
-        self.assertEquals([], self.xdc[2].callstack)
+        self.assertEquals(['setex'], self.remote[0].callstack)
+        self.assertEquals(['setex'], self.remote[1].callstack)
+        self.assertEquals([], self.remote[2].callstack)
 
     def test_expire_everywhere(self):
-        ret = self.redisxdc.expire_everywhere('good', 10)
+        ret = self.redismw.expire_everywhere('good', 10)
         self.assertTrue(ret)
         self.assertEquals(['expire'], self.local.callstack)
-        self.assertEquals(['expire'], self.xdc[0].callstack)
-        self.assertEquals(['expire'], self.xdc[1].callstack)
-        self.assertEquals([], self.xdc[2].callstack)
+        self.assertEquals(['expire'], self.remote[0].callstack)
+        self.assertEquals(['expire'], self.remote[1].callstack)
+        self.assertEquals([], self.remote[2].callstack)
 
     def test_expire_everywhere_missing_key(self):
-        ret = self.redisxdc.expire_everywhere('bad', 10)
+        ret = self.redismw.expire_everywhere('bad', 10)
         self.assertFalse(ret)
 
 # vim:et:fdm=marker:sts=4:sw=4:ts=4

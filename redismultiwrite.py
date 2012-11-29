@@ -14,9 +14,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""The redisxdc module provides a wrapper to the python redis client, exposing
-functions that will mimic multi-master behavior by performing some write
-operations to several extra specified hosts before returning.
+"""The redismultiwrite module provides a wrapper to the python redis client,
+exposing functions that will mimic multi-master behavior by performing some
+write operations to several extra specified hosts before returning.
 
 """
 
@@ -27,8 +27,8 @@ from eventlet import greenpool
 from eventlet import greenthread
 
 
-class RedisXdcError(redis.RedisError):
-    """Base class for redisxdc errors."""
+class RedisMultiWriteError(redis.RedisError):
+    """Base class for redismultiwrite errors."""
     pass
 
 
@@ -41,20 +41,20 @@ class TooManyRetries(redis.ConnectionError):
         self.host = host
 
 
-class RedisXdc(object):
+class RedisMultiWrite(object):
     """Extends the functionality of the redis python client to perform some
     operations to a local redis instance as well as several remote instances
     for synchronization.
     
     """
 
-    def __init__(self, local, xdc=None, retries=3, log=None, pool_size=None):
-        """Creates a new RedisXdc object.
+    def __init__(self, local, remote=None, retries=3, log=None, pool_size=None):
+        """Creates a new RedisMultiWrite object.
 
         :param local: A StrictRedis object representing a connection to the
                       local redis instance.
-        :param xdc: A list of StrictRedis objects representing connections to
-                    remote redis instances. Default: empty list.
+        :param remote: A list of StrictRedis objects representing connections to
+                       remote redis instances. Default: empty list.
         :param retries: The number of times a write operation should be retried
                         on connection errors before failure. If this number is
                         exceeded, TooManyRetries is thrown with the error
@@ -66,7 +66,7 @@ class RedisXdc(object):
 
         """
         self.local = local
-        self.xdc = xdc or []
+        self.remote = remote or []
         self.retries = retries
         self.log = log or logging
         if pool_size:
@@ -98,11 +98,11 @@ class RedisXdc(object):
         # This function only returns data for the local instance, but will
         # wait for all remote instances to finish (and ignores their success or
         # failure).
-        if not self.xdc:
+        if not self.remote:
             return self._attempt(self.local, op, args)
         pile = greenpool.GreenPile(self.pool)
         ret = self.pool.spawn(self._attempt, self.local, op, args)
-        for server in self.xdc:
+        for server in self.remote:
             pile.spawn(self._attempt, server, op, args)
         try:
             return ret.wait()

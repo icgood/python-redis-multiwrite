@@ -47,6 +47,17 @@ class StrictRedisMock(object):
         self.callstack.append('expire')
         return key == 'good'
 
+    def pipeline(self):
+        if self.broken:
+            raise redis.ConnectionError()
+        self.callstack.append('pipeline')
+        return self
+
+    def execute(self):
+        self.callstack.append('execute')
+        return 
+
+
 class RedisMultiWriteTest(unittest.TestCase):
     def setUp(self):
         self.local = StrictRedisMock('local')
@@ -90,6 +101,14 @@ class RedisMultiWriteTest(unittest.TestCase):
             broken.delete_everywhere('good')
         self.assertEquals('broken', cm.exception.host)
 
+    def test_run_everywhere_get(self):
+        ret = self.redismw.run_everywhere('get', ('good', ))
+        self.assertEquals('value', ret)
+        self.assertEquals(['get'], self.local.callstack)
+        self.assertEquals(['get'], self.remote[0].callstack)
+        self.assertEquals(['get'], self.remote[1].callstack)
+        self.assertEquals([], self.remote[2].callstack)
+
     def test_delete_everywhere(self):
         ret = self.redismw.delete_everywhere('good')
         self.assertTrue(ret)
@@ -129,5 +148,15 @@ class RedisMultiWriteTest(unittest.TestCase):
     def test_expire_everywhere_missing_key(self):
         ret = self.redismw.expire_everywhere('bad', 10)
         self.assertFalse(ret)
+
+    def test_pipe_everywhere(self):
+        commands = [('set', ('good', 'value')),
+                    ('delete', ('good', ))]
+        self.redismw.pipe_everywhere(commands)
+        expected = ['pipeline', 'set', 'delete', 'execute']
+        self.assertEquals(expected, self.local.callstack)
+        self.assertEquals(expected, self.remote[0].callstack)
+        self.assertEquals(expected, self.remote[1].callstack)
+        self.assertEquals([], self.remote[2].callstack)
 
 # vim:et:fdm=marker:sts=4:sw=4:ts=4

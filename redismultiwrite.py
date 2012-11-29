@@ -75,13 +75,21 @@ class RedisMultiWrite(object):
             self.pool = greenpool.GreenPool()
 
     def __getattr__(self, name):
-        """Unless otherwise specified, methods on this object will be redirected
-        to the local redis object given in the constructor.
+        """Regular methods on this object will be redirected to the local redis
+        object given in the constructor. Methods suffixed with `_everywhere`
+        will be performed everywhere.
 
         :param name: The method name passed to the local instance.
 
         """
-        return getattr(self.local, name)
+        if name.endswith('_everywhere'):
+            name, everywhere = name.rsplit('_', 1)
+            getattr(self.local, name)   # Check the command exists.
+            def intercept(*args):
+                return self.run_everywhere(name, args)
+            return intercept
+        else:
+            return getattr(self.local, name)
 
     def _wait_pile(self, pile):
         # Waits on a GreenPile to finish while ignoring thrown exceptions.
@@ -93,17 +101,29 @@ class RedisMultiWrite(object):
             except Exception:
                 pass
 
-    def _run_everywhere(self, op, args):
+    def _simple_exec(self, conn, command):
+        # Executor that runs a single command.
+        op, args = command
+        return getattr(conn, op)(*args)
+
+    def _pipe_exec(self, conn, commands):
+        # Executor that pipelines commands.
+        pipe = conn.pipeline()
+        for op, args in commands:
+            getattr(conn, op)(*args)
+        return pipe.execute()
+
+    def _run_all(self, executor, data):
         # Performs an operation locally and then mimics it on remote clients.
         # This function only returns data for the local instance, but will
         # wait for all remote instances to finish (and ignores their success or
         # failure).
         if not self.remote:
-            return self._attempt(self.local, op, args)
+            return self._attempt(self.local, executor, data)
         pile = greenpool.GreenPile(self.pool)
-        ret = self.pool.spawn(self._attempt, self.local, op, args)
+        ret = self.pool.spawn(self._attempt, self.local, executor, data)
         for server in self.remote:
-            pile.spawn(self._attempt, server, op, args)
+            pile.spawn(self._attempt, server, executor, data)
         try:
             return ret.wait()
         except TooManyRetries, e:
@@ -112,13 +132,16 @@ class RedisMultiWrite(object):
         finally:
             self._wait_pile(pile)
 
-    def _attempt(self, conn, op, args):
+    def _attempt(self, conn, executor, data):
         # This method is run for each redis connection in its own GreenThread.
-        host = conn.connection_pool.connection_kwargs.get('host', '[Unknown]')
+        try:
+            host = conn.connection_pool.connection_kwargs['host']
+        except (AttributeError, KeyError):
+            host = '[Unknown]'
         last_connection_error = None
         for i in range(self.retries):
             try:
-                return getattr(conn, op)(*args)
+                return executor(conn, data)
             except redis.ConnectionError, e:
                 self.log.warn('Connectivity issue with '+host)
                 last_connection_error = e
@@ -129,64 +152,35 @@ class RedisMultiWrite(object):
         greenthread.sleep(0)
         raise TooManyRetries(last_connection_error, host)
 
-    def delete_everywhere(self, key):
-        """Delete a key from the local redis instance and all remote redis
-        instances. This operation is not atomic. The return value and/or
-        exception thrown will only come from the local instance, but the method
-        will not return until all child operations are finished.
-
-        :param key: The redis key to delete.
-
-        :returns: True if successful, False otherwise.
-        :raises: TooManyRetries
-
-        """
-        return bool(self._run_everywhere('delete', (key, )))
-
-    def set_everywhere(self, key, value):
-        """Sets a key to a value on the local redis instance and all remote
-        redis instances. This operation is not atomic. The return value and/or
-        exception thrown will only come from the local instance, but the method
-        will not return until all child operations are finished.
-
-        :param key: The redis key to set.
-        :param value: The new string value of the key.
-
-        :returns: True if successful, False basically never.
-        :raises: TooManyRetries
-
-        """
-        return self._run_everywhere('set', (key, value))
-
-    def setex_everywhere(self, key, seconds, value):
-        """Temporarily sets a key to a value on the local redis instance and all
+    def run_everywhere(self, command, args):
+        """Runs the command with the given args on the local instance and all
         remote redis instances. This operation is not atomic. The return value
         and/or exception thrown will only come from the local instance, but the
         method will not return until all child operations are finished.
 
-        :param key: The redis key to set.
-        :param seconds: The number of seconds before key expires.
-        :param value: The new string value of the key.
+        :param command: The command to run, as it would be given as a method to
+                        the python redis library, e.g. 'delete' or 'expire'.
+        :param args: Tuple of arguments to pass in to the method.
 
-        :returns: True if successful, False basically never.
+        :returns: The return value from the local instance execution.
         :raises: TooManyRetries
 
         """
-        return self._run_everywhere('setex', (key, seconds, value))
+        return self._run_all(self._simple_exec, (command, args))
 
-    def expire_everywhere(self, key, seconds):
-        """Sets key expiration in seconds on the local redis instance and all
-        remote redis instances. This operation is not atomic. The return value
-        and/or exception thrown will only come from the local instance, but the
-        method will not return until all child operations are finished.
+    def pipe_everywhere(self, zipped_commands):
+        """Runs the pipe() function of the python redis library on the local
+        instance and all remote redis instances. The operations are atomic to
+        each instance, but the operation as a whole is non-atomic. The return
+        value and/or exception thrown will only come from the local instance,
+        but the method will not return until all child operations are finished.
 
-        :param key: The redis key to set expiration.
-        :param seconds: The number of seconds before key expires.
+        :param zipped_commands: List of tuples (command, args) to construct a
+                                pipeline of commands with.
 
-        :returns: True if successful, False basically never.
+        :returns: The results of the pipe() on the local instance.
         :raises: TooManyRetries
 
         """
-
-        return self._run_everywhere('expire', (key, seconds))
+        return self._run_all(self._pipe_exec, zipped_commands)
 

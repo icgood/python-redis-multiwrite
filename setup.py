@@ -29,6 +29,5 @@ setup(name='redis-xdc',
           'redis',
           'hiredis',
           'eventlet',
-          'greenlet',
       ])
 

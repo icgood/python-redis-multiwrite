@@ -1,0 +1,8 @@
+.coverage
+.venv/
+build/
+dist/
+redis_xdc.egg-info/
+*.pyc
+nosetests.xml
+coverage.xml

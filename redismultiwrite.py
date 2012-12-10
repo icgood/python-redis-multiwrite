@@ -98,8 +98,10 @@ class RedisMultiWrite(object):
                 pile.next()
             except StopIteration:
                 break
+            except TooManyRetries, e:
+                self.log.error(e.message)
             except Exception:
-                pass
+                self.log.exception('Unhandled Exception')
 
     def _simple_exec(self, conn, command):
         # Executor that runs a single command.

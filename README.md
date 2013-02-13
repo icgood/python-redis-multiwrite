@@ -5,11 +5,11 @@ To setup the tests:
 
     virtualenv .venv
     . .venv/bin/activate
-    pip install nose coverage nosexcover redis eventlet
+    pip install nose redis eventlet
 
 Then you can repeatedly run:
 
-    nosetests --where=tests --with-xcoverage --cover-erase --cover-package=redismultiwrite
+    nosetests
 
 To install the package `redismultiwrite` onto your system:
 

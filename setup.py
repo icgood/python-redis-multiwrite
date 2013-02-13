@@ -16,7 +16,7 @@
 
 from setuptools import setup
 
-setup(name='redis-multiwrite',
+setup(name='python-redis-multiwrite',
       version='0.1.0',
       description='Simultaneous redis write operations against many servers.',
       author='Ian Good',
@@ -29,5 +29,9 @@ setup(name='redis-multiwrite',
           'redis',
           'hiredis',
           'eventlet',
-      ])
+      ],
+      classifiers=['Development Status :: 3 - Alpha',
+                   'Intended Audience :: Developers',
+                   'Intended Audience :: Information Technology',
+                   'Programming Language :: Python'])
 

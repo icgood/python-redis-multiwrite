@@ -17,7 +17,7 @@
 from setuptools import setup
 
 setup(name='redis-multiwrite',
-      version='0.0.0',
+      version='0.1.0',
       description='Simultaneous redis write operations against many servers.',
       author='Ian Good',
       author_email='ian.good@rackspace.com',

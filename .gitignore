@@ -2,7 +2,7 @@
 .venv/
 build/
 dist/
-redis_multiwrite.egg-info/
+python_redis_multiwrite.egg-info/
 *.pyc
 nosetests.xml
 coverage.xml

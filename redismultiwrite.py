@@ -23,7 +23,7 @@ write operations to several extra specified hosts before returning.
 import logging
 
 import redis
-from eventlet import greenpool
+from eventlet.greenpool import GreenPool, GreenPile
 from eventlet import greenthread
 
 
@@ -48,7 +48,8 @@ class RedisMultiWrite(object):
     
     """
 
-    def __init__(self, local, remote=None, retries=3, log=None, pool_size=None):
+    def __init__(self, local, remote=None, retries=3, log=None, pool_size=None,
+                       wait_for_remote=False):
         """Creates a new RedisMultiWrite object.
 
         :param local: A StrictRedis object representing a connection to the
@@ -63,16 +64,19 @@ class RedisMultiWrite(object):
                     standard destination of the `logging` module.
         :param pool_size: The size of the `GreenPool`. See the `eventlet`
                           library for details and default value.
+        :param wait_for_remote: If False, a request will return as soon as the
+                                local connection has handled it and the remote
+                                connections will continue in the background.
+                                If True, the request will only return once all
+                                connections have completed.
 
         """
         self.local = local
         self.remote = remote or []
         self.retries = retries
         self.log = log or logging
-        if pool_size:
-            self.pool = greenpool.GreenPool(pool_size)
-        else:
-            self.pool = greenpool.GreenPool()
+        self.pool = GreenPool(pool_size) if pool_size else GreenPool()
+        self.wait_for_remote = wait_for_remote
 
     def __getattr__(self, name):
         """Regular methods on this object will be redirected to the local redis
@@ -122,7 +126,7 @@ class RedisMultiWrite(object):
         # failure).
         if not self.remote:
             return self._attempt(self.local, executor, data)
-        pile = greenpool.GreenPile(self.pool)
+        pile = GreenPile(self.pool)
         ret = self.pool.spawn(self._attempt, self.local, executor, data)
         for server in self.remote:
             pile.spawn(self._attempt, server, executor, data)
@@ -132,7 +136,10 @@ class RedisMultiWrite(object):
             self.log.error(e.message)
             raise
         finally:
-            self._wait_pile(pile)
+            if self.wait_for_remote:
+                self._wait_pile(pile)
+            else:
+                self.pool.spawn(self._wait_pile, pile)
 
     def _attempt(self, conn, executor, data):
         # This method is run for each redis connection in its own GreenThread.

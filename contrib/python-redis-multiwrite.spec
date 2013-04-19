@@ -29,7 +29,7 @@ Execute redis commands against multiple servers simultaneously.
 %files
 %defattr(-,root,root,-)
 %{python_sitelib}/redismultiwrite.py*
-%{python_sitelib}/redis_multiwrite*.egg-info
+%{python_sitelib}/python_redis_multiwrite*.egg-info
 
 %changelog
 * Mon Dec 03 2012 Ian Good <ian.good@rackspace.com> 20121203-1

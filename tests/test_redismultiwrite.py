@@ -149,10 +149,10 @@ class RedisMultiWriteTest(unittest.TestCase):
         ret = self.redismw.expire_everywhere('bad', 10)
         self.assertFalse(ret)
 
-    def test_pipe_everywhere(self):
+    def test_pipeline_everywhere(self):
         commands = [('set', ('good', 'value')),
                     ('delete', ('good', ))]
-        self.redismw.pipe_everywhere(commands)
+        self.redismw.pipeline_everywhere(commands)
         expected = ['pipeline', 'set', 'delete', 'execute']
         self.assertEquals(expected, self.local.callstack)
         self.assertEquals(expected, self.remote[0].callstack)

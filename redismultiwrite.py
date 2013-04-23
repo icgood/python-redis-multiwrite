@@ -28,12 +28,13 @@ from eventlet import greenthread
 
 
 class RedisMultiWriteError(redis.RedisError):
-    """Base class for redismultiwrite errors."""
+    """Base class for :mod:`redismultiwrite` errors."""
     pass
 
 
-class TooManyRetries(redis.ConnectionError):
+class TooManyRetries(RedisMultiWriteError, redis.ConnectionError):
     """Exception thrown when an operation exceeds its allowed number of retries.
+    Inherits from :exc:`RedisMultiWriteError` and :exc:`redis.ConnectionError`.
     
     """
     def __init__(self, exc, host):
@@ -42,35 +43,32 @@ class TooManyRetries(redis.ConnectionError):
 
 
 class RedisMultiWrite(object):
-    """Extends the functionality of the redis python client to perform some
-    operations to a local redis instance as well as several remote instances
-    for synchronization.
-    
+    """Creates a new RedisMultiWrite object.
+
+    :param local: A :class:`~redis.StrictRedis` object representing a
+                  connection to the local redis instance.
+    :param remote: A list of :class:`~redis.StrictRedis` objects
+                   representing connections to remote redis instances.
+                   Default: empty list.
+    :param retries: The number of times a write operation should be retried
+                    on connection errors before failure. If this number is
+                    exceeded, :exc:`TooManyRetries` is thrown with the error
+                    message of the last attempt. Default: 3.
+    :param log: The python-style log destination object. Defaults to the
+                standard destination of the :mod:`logging` module.
+    :param pool_size: The size of the
+                      :class:`~eventlet.greenpool.GreenPool`. See the
+                      referenced documentation for defaults.
+    :param wait_for_remote: If False, a request will return as soon as the
+                            local connection has handled it and the remote
+                            connections will continue in the background.
+                            If True, the request will only return once all
+                            connections have completed.
+
     """
 
     def __init__(self, local, remote=None, retries=3, log=None, pool_size=None,
                        wait_for_remote=False):
-        """Creates a new RedisMultiWrite object.
-
-        :param local: A StrictRedis object representing a connection to the
-                      local redis instance.
-        :param remote: A list of StrictRedis objects representing connections to
-                       remote redis instances. Default: empty list.
-        :param retries: The number of times a write operation should be retried
-                        on connection errors before failure. If this number is
-                        exceeded, TooManyRetries is thrown with the error
-                        message of the last attempt. Default: 3.
-        :param log: The python-style log destination object. Defaults to the
-                    standard destination of the `logging` module.
-        :param pool_size: The size of the `GreenPool`. See the `eventlet`
-                          library for details and default value.
-        :param wait_for_remote: If False, a request will return as soon as the
-                                local connection has handled it and the remote
-                                connections will continue in the background.
-                                If True, the request will only return once all
-                                connections have completed.
-
-        """
         self.local = local
         self.remote = remote or []
         self.retries = retries
@@ -172,23 +170,25 @@ class RedisMultiWrite(object):
         :param args: Tuple of arguments to pass in to the method.
 
         :returns: The return value from the local instance execution.
-        :raises: TooManyRetries
+        :raises: :exc:`TooManyRetries`
 
         """
         return self._run_all(self._simple_exec, (command, args))
 
-    def pipe_everywhere(self, zipped_commands):
-        """Runs the pipe() function of the python redis library on the local
-        instance and all remote redis instances. The operations are atomic to
-        each instance, but the operation as a whole is non-atomic. The return
-        value and/or exception thrown will only come from the local instance,
-        but the method will not return until all child operations are finished.
+    def pipeline_everywhere(self, zipped_commands):
+        """Runs the :meth:`~eventlet.StrictRedis.pipeline` function of the
+        python redis library on the local instance and all remote redis
+        instances. The operations are atomic to each instance, but the
+        operation as a whole is non-atomic. The return value and/or exception
+        thrown will only come from the local instance, but the method will not
+        return until all child operations are finished.
 
         :param zipped_commands: List of tuples (command, args) to construct a
                                 pipeline of commands with.
 
-        :returns: The results of the pipe() on the local instance.
-        :raises: TooManyRetries
+        :returns: The results of the :meth:`~eventlet.StrictRedis.pipeline` on
+                  the local instance.
+        :raises: :exc:`TooManyRetries`
 
         """
         return self._run_all(self._pipe_exec, zipped_commands)
